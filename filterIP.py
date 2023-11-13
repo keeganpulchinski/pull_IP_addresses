@@ -3,6 +3,7 @@ import gzip
 import re
 import ipinfo
 import os
+from concurrent.futures import ThreadPoolExecutor
 
 # Initialize AWS S3 client
 key_id = os.environ.get('AWS_ACCESS_KEY_ID')
@@ -42,9 +43,8 @@ def get_location_from_ip(ip_address):
         # Handle invalid IP addresses or errors
         return 'Unknown'
 
-# Process each log file
-for obj in objects.get('Contents', []):
-    # Download the log file
+# Function to process a log file
+def process_log_file(obj):
     file_key = obj['Key']
     response = s3.get_object(Bucket=bucket_name, Key=file_key)
     log_content = response['Body'].read()
@@ -52,10 +52,6 @@ for obj in objects.get('Contents', []):
     # Check if the log file is compressed (e.g., in gzip format) and decompress it if necessary
     if file_key.endswith('.gz'):
         log_content = gzip.decompress(log_content)
-
-    # Check if the log content contains a 403 Forbidden entry
-    if ' 403 ' in log_content.decode('utf-8'):
-        continue  # Skip this log file if it contains a 403 Forbidden entry
 
     # Extract IP addresses from the log file
     ip_addresses = extract_ip_addresses_from_file(log_content.decode('utf-8'))
@@ -65,8 +61,15 @@ for obj in objects.get('Contents', []):
         if location != 'Unknown':
             ip_location_mapping[ip] = location
 
-# Calculate the maximum IP address length
-max_ip_length = max(len(ip) for ip in ip_location_mapping.keys())
+# Use ThreadPoolExecutor to parallelize the processing of log files
+with ThreadPoolExecutor() as executor:
+    executor.map(process_log_file, objects.get('Contents', []))
+
+# Check if the dictionary is not empty before calculating the maximum IP address length
+if ip_location_mapping:
+    max_ip_length = max(len(ip) for ip in ip_location_mapping.keys())
+else:
+    max_ip_length = 0
 
 # Write unique IP addresses with locations to the output file
 with open(output_file, 'w') as output:
