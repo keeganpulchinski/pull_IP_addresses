@@ -72,7 +72,7 @@ else:
     max_ip_length = 0
 
 # Write unique IP addresses with locations to the output file
-with open(output_file, 'w') as output:
+with open(output_file, 'w', encoding='utf-8') as output:
     for ip, location in ip_location_mapping.items():
         padded_ip = ip.ljust(max_ip_length)  # Pad the IP address to make all the same width
         output.write(f'{padded_ip} ---------- {location}\n')
